@@ -1,0 +1,14 @@
+@"
+.venv*
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+.DS_Store
+Thumbs.db
+.env
+services/nlp_intent/out/
+services/nlp_emotion/out/
+"@ | Out-File -Encoding utf8 .gitignore

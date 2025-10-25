@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+pydantic>=2
+transformers==4.44.2
+datasets==2.21.0
+scikit-learn==1.4.2
+torch==2.4.0
+pandas==2.2.2
+numpy==1.26.4
+dateparser

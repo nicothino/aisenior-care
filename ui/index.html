@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Senior Care</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 min-h-screen">
+  <div class="max-w-md mx-auto p-4">
+    <header class="mt-4 mb-6 text-center">
+      <h1 class="text-2xl font-bold text-slate-800">AI Senior Care</h1>
+      <p class="text-slate-500 text-sm">Asistente para recordatorios, citas y apoyo</p>
+    </header>
+
+    <div class="bg-white shadow rounded-2xl p-4 space-y-3">
+      <label for="userText" class="block text-slate-700 font-medium">¿Qué necesitas?</label>
+      <textarea id="userText" rows="3" class="w-full rounded-xl border border-slate-300 p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Ej: Recuérdame tomar enalapril mañana a las 8am"></textarea>
+      <button id="sendBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl">Procesar</button>
+      <p id="hint" class="text-xs text-slate-500">El texto se analiza con modelos de intención y emoción.</p>
+    </div>
+
+    <section id="result" class="mt-6 hidden space-y-4">
+      <div class="bg-white shadow rounded-2xl p-4">
+        <h2 class="text-lg font-semibold text-slate-800">Resultado</h2>
+        <div class="mt-3 grid grid-cols-2 gap-3">
+          <div class="bg-slate-50 rounded-xl p-3">
+            <div class="text-xs text-slate-500">Intención</div>
+            <div id="intent" class="text-slate-800 font-semibold">-</div>
+          </div>
+          <div class="bg-slate-50 rounded-xl p-3">
+            <div class="text-xs text-slate-500">Emoción</div>
+            <div id="emotion" class="text-slate-800 font-semibold">-</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white shadow rounded-2xl p-4">
+        <h3 class="text-lg font-semibold text-slate-800">Acciones</h3>
+        <div id="actions" class="mt-3 space-y-2"></div>
+      </div>
+    </section>
+
+    <footer class="mt-10 text-center text-xs text-slate-400">
+      v0.1 · Demo local · API en <span id="apiBase">http://127.0.0.1:8000</span>
+    </footer>
+  </div>
+
+  <script>
+    // ---------- Utilidades para Google Calendar ----------
+    function pad(n){ return n < 10 ? '0' + n : '' + n }
+
+    function toGCalDateRange(isoWhen, durationMinutes = 60) {
+      const start = new Date(isoWhen);
+      if (isNaN(start.getTime())) return null;
+      const end = new Date(start.getTime() + durationMinutes * 60000);
+      const toZ = (d) =>
+        d.getUTCFullYear().toString() +
+        pad(d.getUTCMonth() + 1) +
+        pad(d.getUTCDate()) + 'T' +
+        pad(d.getUTCHours()) +
+        pad(d.getUTCMinutes()) +
+        pad(d.getUTCSeconds()) + 'Z';
+      return `${toZ(start)}/${toZ(end)}`;
+    }
+
+    function openGoogleCalendar({ text, when, details = '' }) {
+      const range = toGCalDateRange(when);
+      if (!range) {
+        alert('No se pudo calcular la fecha para Google Calendar.');
+        return;
+      }
+      const params = new URLSearchParams({
+        action: 'TEMPLATE',
+        text: text || 'Recordatorio',
+        dates: range,
+        details
+        // location, recur: opcionales
+      });
+      const url = `https://calendar.google.com/calendar/render?${params.toString()}`;
+      window.open(url, '_blank');
+    }
+
+    // ---------- UI / Lógica principal ----------
+    const btn = document.getElementById('sendBtn');
+    const ta = document.getElementById('userText');
+    const result = document.getElementById('result');
+    const intentEl = document.getElementById('intent');
+    const emotionEl = document.getElementById('emotion');
+    const actionsEl = document.getElementById('actions');
+    const apiBaseEl = document.getElementById('apiBase');
+
+    // Usa el mismo host:puerto donde está sirviendo FastAPI (evita CORS)
+    const API_BASE = location.origin;
+    apiBaseEl.textContent = API_BASE;
+
+    async function processText() {
+      const text = ta.value.trim();
+      if (!text) { ta.focus(); return; }
+      btn.disabled = true; btn.textContent = 'Procesando...';
+
+      try {
+        const res = await fetch(`${API_BASE}/orchestrate/process-text`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ text })
+        });
+        if (!res.ok) throw new Error('Error HTTP ' + res.status);
+
+        const data = await res.json();
+        // Pintar intención y emoción
+        intentEl.textContent = data.intent?.intent ?? '-';
+        emotionEl.textContent = data.emotion?.emotion ?? '-';
+
+        // Render de acciones
+        actionsEl.innerHTML = '';
+        if (Array.isArray(data.actions) && data.actions.length) {
+          for (const a of data.actions) {
+            const card = document.createElement('div');
+            card.className = 'rounded-xl border border-slate-200 p-3';
+
+            if (a.type === 'schedule') {
+              const whenText = a.when ? ` • ${new Date(a.when).toLocaleString()}` : '';
+              const safeText = (a.text || '').replace(/"/g, '&quot;');
+              const safeWhen = a.when || '';
+
+              card.innerHTML = `
+                <div class="flex items-start justify-between gap-3">
+                  <div class="flex-1">
+                    <span class="inline-block text-xs px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700">Agendar</span>
+                    <div class="mt-2 text-sm text-slate-700">${(a.text || '')}${whenText}</div>
+                  </div>
+                  <button
+                    class="shrink-0 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-sm hover:bg-indigo-700 ${a.when ? '' : 'opacity-50 cursor-not-allowed'}"
+                    ${a.when ? '' : 'disabled'}
+                    onclick='openGoogleCalendar({ text: "${safeText}", when: "${safeWhen}", details: "Creado desde AI Senior Care" })'
+                  >
+                    Google
+                  </button>
+                </div>
+              `;
+            } else if (a.type === 'medical_alert') {
+              card.innerHTML = `
+                <span class="inline-block text-xs px-2 py-1 rounded-lg bg-rose-50 text-rose-700">Alerta médica</span>
+                <div class="mt-2 text-sm text-slate-700">Severidad: ${a.severity || 'N/A'}</div>
+              `;
+            } else if (a.type === 'support') {
+              card.innerHTML = `
+                <span class="inline-block text-xs px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700">Apoyo</span>
+                <div class="mt-2 text-sm text-slate-700">${a.message || ''}</div>
+              `;
+            } else {
+              card.innerHTML = `
+                <span class="inline-block text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-700">${a.type}</span>
+                <div class="mt-2 text-sm text-slate-700 break-words">${JSON.stringify(a)}</div>
+              `;
+            }
+
+            actionsEl.appendChild(card);
+          }
+        } else {
+          const empty = document.createElement('div');
+          empty.className = 'text-sm text-slate-500';
+          empty.textContent = 'Sin acciones detectadas.';
+          actionsEl.appendChild(empty);
+        }
+
+        result.classList.remove('hidden');
+      } catch (e) {
+        alert('No se pudo procesar: ' + e.message);
+      } finally {
+        btn.disabled = false; btn.textContent = 'Procesar';
+      }
+    }
+
+    btn.addEventListener('click', processText);
+    ta.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) processText();
+    });
+  </script>
+</body>
+</html>
