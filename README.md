@@ -1,4 +1,4 @@
-# AI Senior Care - Documentación Técnica (v1.0)
+# AI Senior Care 
 
 ## Descripción General
 **AI Senior Care** es una plataforma de asistencia inteligente diseñada para brindar apoyo a adultos mayores mediante el uso de inteligencia artificial (IA) y procesamiento de lenguaje natural (NLP) en español. Este proyecto ofrece un agente conversacional que detecta intenciones (e.g., recordatorios, citas) y emociones (e.g., ansiedad, tristeza) a partir de texto ingresado por el usuario, generando acciones automatizadas como alertas, recordatorios o mensajes de apoyo. La solución está pensada para entornos residenciales, promoviendo autonomía, seguridad y bienestar emocional.
